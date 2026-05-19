@@ -239,6 +239,7 @@ CPTZControlDlg::CPTZControlDlg(CWnd* pParent /*=nullptr*/)
 	, m_iHotKeyCurrentCam{ 0 }
 	, m_iHotKeyNextCam{ 0 }
 	, m_iHotKeyPosition{ 0 }
+	, m_pHttpServer(nullptr)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	m_hAccel = ::LoadAccelerators(AfxFindResourceHandle(IDR_ACCELERATOR, RT_ACCELERATOR), MAKEINTRESOURCE(IDR_ACCELERATOR));
@@ -343,6 +344,7 @@ BEGIN_MESSAGE_MAP(CPTZControlDlg, CDialogEx)
 	ON_BN_UNPUSHED(IDC_BT_RIGHT, &CPTZControlDlg::OnBtUnpushed)
 	ON_WM_TIMER()
 	ON_WM_HOTKEY()
+	ON_MESSAGE(WM_PTZ_HTTP, &CPTZControlDlg::OnPtzHttpCommand)
 END_MESSAGE_MAP()
 
 
@@ -594,6 +596,15 @@ BOOL CPTZControlDlg::OnInitDialog()
 		AfxMessageBox(IDP_ERR_NO_CAMERA, MB_ICONERROR);
 	}
 
+	// Start HTTP REST server on port 8080
+	m_pHttpServer = PTZHttpServer_Create(GetSafeHwnd(), 8080);
+	if (!PTZHttpServer_Start(m_pHttpServer))
+	{
+		PTZHttpServer_Delete(m_pHttpServer);
+		m_pHttpServer = nullptr;
+		AfxMessageBox(_T("HTTP server failed to start on port 8080."), MB_ICONWARNING);
+	}
+
 	//-------------Register hotkeys-----------------------------------------
 
 	for (int iWebCam = 0; iWebCam<(m_iNumWebCams==0 ? 1 : m_iNumWebCams); ++iWebCam)
@@ -764,6 +775,14 @@ void CPTZControlDlg::OnClose()
 				10*(iWebCam+1)+iPreset
 			);
 		}
+	}
+
+	// Stop HTTP server before destroying the window
+	if (m_pHttpServer)
+	{
+		PTZHttpServer_Stop(m_pHttpServer);
+		PTZHttpServer_Delete(m_pHttpServer);
+		m_pHttpServer = nullptr;
 	}
 
 	DestroyWindow();
@@ -1016,5 +1035,68 @@ void CPTZControlDlg::OnBtSettings()
 
 	// Set tooltips again
 	SetActiveCam(m_iCurrentWebCam);
+}
+
+// ---------------------------------------------------------------------------
+// WM_PTZ_HTTP handler
+// ---------------------------------------------------------------------------
+LRESULT CPTZControlDlg::OnPtzHttpCommand(WPARAM, LPARAM lParam)
+{
+	PTZHttpCommand* pCmd = reinterpret_cast<PTZHttpCommand*>(lParam);
+	if (!pCmd) return 0;
+
+	int idx = (pCmd->camIndex < 0) ? m_iCurrentWebCam : pCmd->camIndex;
+
+	if (pCmd->cmd != PTZHttpCommand::GetCount)
+	{
+		if (idx < 0 || idx >= m_iNumWebCams)
+		{
+			pCmd->success = false;
+			::SetEvent(pCmd->m_ev);
+			return 0;
+		}
+	}
+
+	pCmd->success = true;
+
+	switch (pCmd->cmd)
+	{
+	case PTZHttpCommand::Pan:
+		m_aWebCams[idx].Pan(pCmd->param);
+		break;
+	case PTZHttpCommand::Tilt:
+		m_aWebCams[idx].Tilt(pCmd->param);
+		break;
+	case PTZHttpCommand::Zoom:
+		pCmd->intResult = m_aWebCams[idx].Zoom(pCmd->param);
+		break;
+	case PTZHttpCommand::GotoHome:
+		m_aWebCams[idx].GotoHome();
+		break;
+	case PTZHttpCommand::GotoPreset:
+		if (pCmd->param < 0 || pCmd->param >= CWebcamController::NUM_PRESETS)
+			pCmd->success = false;
+		else
+			m_aWebCams[idx].GotoPreset(pCmd->param);
+		break;
+	case PTZHttpCommand::SavePreset:
+		if (pCmd->param < 0 || pCmd->param >= CWebcamController::NUM_PRESETS)
+			pCmd->success = false;
+		else
+			m_aWebCams[idx].SavePreset(pCmd->param);
+		break;
+	case PTZHttpCommand::GetZoom:
+		pCmd->intResult = m_aWebCams[idx].GetCurrentZoom();
+		break;
+	case PTZHttpCommand::GetCount:
+		pCmd->intResult = m_iNumWebCams;
+		break;
+	default:
+		pCmd->success = false;
+		break;
+	}
+
+	::SetEvent(pCmd->m_ev);
+	return 0;
 }
 

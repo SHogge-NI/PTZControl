@@ -5,6 +5,7 @@
 #include "pch.h"
 #include "framework.h"
 #include "PTZControl.h"
+#include "ExtensionUnit.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -143,6 +144,59 @@ BOOL CPTZControlApp::InitInstance()
 	m_bNoReset = GetProfileInt(REG_OPTIONS,REG_NORESET,FALSE)!=0 || cmdInfo.m_bNoReset;
 	m_bNoGuard = GetProfileInt(REG_OPTIONS,REG_NOGUARD,FALSE)!=0 || cmdInfo.m_bNoGuard;
 	m_bShowDevices = cmdInfo.m_bShowDevices;
+
+//-------------Check for cameras early to avoid assertion--------------
+
+	// List of supported camera name tokens
+	static const LPCTSTR g_aCameras[] = 
+	{
+		_T("PTZ Pro"),
+		_T("Logi Rally"),
+		_T("ConferenceCam"),
+		_T("Logi Group Camera"),
+	};
+
+	// Get list of available devices
+	CStringArray aDevices;
+	CWebcamController::ListDevices(aDevices);
+
+	// Check if we have any compatible cameras
+	int iNumCompatibleCams = 0;
+	CStringArray aStrCameraNameToSearch;
+	for (const auto *p : g_aCameras)
+		aStrCameraNameToSearch.Add(p);
+	CString strCameraNameToSearch = GetProfileString(REG_DEVICE, REG_DEVICENAME, _T(""));
+	if (!strCameraNameToSearch.IsEmpty())
+		aStrCameraNameToSearch.Add(strCameraNameToSearch);
+	if (!m_strDevName.IsEmpty())
+		aStrCameraNameToSearch.Add(m_strDevName);
+
+	// Search for matching cameras
+	for (int i = 0; i < aDevices.GetCount(); ++i)
+	{
+		CString strDevice = aDevices[i], strCameraName;
+		int iPos = strDevice.Find(_T('\t'));
+		if (iPos != -1)
+		{
+			strCameraName = strDevice.Left(iPos);
+			// Check if the name matches any of our search tokens
+			for (int j = 0; j < aStrCameraNameToSearch.GetCount(); ++j)
+			{
+				if (aStrCameraNameToSearch[j] == _T("*") || strCameraName.Find(aStrCameraNameToSearch[j]) != -1)
+				{
+					iNumCompatibleCams++;
+					break;
+				}
+			}
+		}
+	}
+
+	// If no compatible cameras found, show message and exit
+	if (iNumCompatibleCams == 0)
+	{
+		AfxMessageBox(_T("No camera connected. Please connect a compatible PTZ camera and rerun the program."), MB_ICONERROR);
+		return FALSE;
+	}
 
 //-------------Main ----------------------------------------------------
 

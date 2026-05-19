@@ -5,6 +5,15 @@
 #pragma once
 #include "resource.h"
 #include "ExtensionUnit.h"
+#include "PTZHttpServer.h"
+
+#include <memory>
+
+// Factory functions implemented in PTZHttpServer.cpp (no httplib.h here)
+PTZHttpServerHandle* PTZHttpServer_Create(HWND hwnd, int port);
+bool                 PTZHttpServer_Start(PTZHttpServerHandle* h);
+void                 PTZHttpServer_Stop(PTZHttpServerHandle* h);
+void                 PTZHttpServer_Delete(PTZHttpServerHandle* h);
 
 /////////////////////////////////////////////////////////////////////////////
 // Hotkey definitions for 0 (Home), and memory positions 1-8
@@ -121,6 +130,9 @@ protected:
 	CWinThread* m_pGuardThread;
 	static UINT AFX_CDECL GuardThread(LPVOID hWnd); // AFX_THREADPROC
 
+	// HTTP REST server
+	PTZHttpServerHandle*	m_pHttpServer;
+
 // Hotkey perset, used by timer to switch to a camera and memory position
 	int m_iHotKeyCurrentCam;
 	int m_iHotKeyNextCam;
@@ -161,4 +173,5 @@ protected:
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnBtUnpushed();
 	afx_msg void OnBtSettings();
+	afx_msg LRESULT OnPtzHttpCommand(WPARAM wParam, LPARAM lParam);
 };

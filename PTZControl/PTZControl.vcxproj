@@ -44,7 +44,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <UseOfMfc>Static</UseOfMfc>
   </PropertyGroup>
@@ -186,9 +186,11 @@
     <ClInclude Include="ExtensionUnit.h" />
     <ClInclude Include="ExtensionUnitDefines.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="httplib.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PTZControl.h" />
     <ClInclude Include="PTZControlDlg.h" />
+    <ClInclude Include="PTZHttpServer.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="SettingsDlg.h" />
     <ClInclude Include="targetver.h" />
@@ -203,6 +205,10 @@
     </ClCompile>
     <ClCompile Include="PTZControl.cpp" />
     <ClCompile Include="PTZControlDlg.cpp" />
+    <!-- PTZHttpServer.cpp includes httplib.h which conflicts with MFC macros in pch.h -->
+    <ClCompile Include="PTZHttpServer.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="SettingsDlg.cpp" />
   </ItemGroup>
   <ItemGroup>
