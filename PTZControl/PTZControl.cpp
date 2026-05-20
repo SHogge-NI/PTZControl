@@ -149,9 +149,16 @@ BOOL CPTZControlApp::InitInstance()
 	// Create the Dialog
 	m_pDlg = new CPTZControlDlg();
 	if (m_pDlg->Create(CPTZControlDlg::IDD))
+	{
 		m_pMainWnd = m_pDlg;
+		m_pDlg->ShowWindow(SW_SHOW);
+		m_pDlg->UpdateWindow();
+	}
 	else
+	{
+		::MessageBox(NULL, _T("Dialog creation failed!"), _T("PTZControl Error"), MB_OK | MB_ICONERROR);
 		return FALSE;
+	}
 
 	// Succeeded
 	return TRUE;

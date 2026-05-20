@@ -5,6 +5,7 @@
 #pragma once
 #include "resource.h"
 #include "ExtensionUnit.h"
+#include "HttpServer.h"
 
 /////////////////////////////////////////////////////////////////////////////
 // Hotkey definitions for 0 (Home), and memory positions 1-8
@@ -161,4 +162,8 @@ protected:
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnBtUnpushed();
 	afx_msg void OnBtSettings();
+	afx_msg LRESULT OnHttpCommand(WPARAM wParam, LPARAM lParam);
+
+	CHttpServer m_httpServer;
+	int m_iHttpZoomDirection;	// Zoom direction for HTTP hold repeat
 };

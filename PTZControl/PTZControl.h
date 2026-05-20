@@ -33,6 +33,7 @@
 #define TIMER_HOTKEY_SWITCH_TO		4714	// Used for Hotkeys sequence
 #define TIMER_HOTKEY_POSITION		4715
 #define TIMER_HOTKEY_SWITCH_BACK	4716
+#define TIMER_HTTP_HOLD_STOP		4717	// Stop movement after HTTP hold duration
 
 #define TIMER_HOTKEY_DELAY_1		10		// Switch to camera
 #define TIMER_HOTKEY_DELAY_2		10		// Set position

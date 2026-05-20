@@ -239,6 +239,7 @@ CPTZControlDlg::CPTZControlDlg(CWnd* pParent /*=nullptr*/)
 	, m_iHotKeyCurrentCam{ 0 }
 	, m_iHotKeyNextCam{ 0 }
 	, m_iHotKeyPosition{ 0 }
+	, m_iHttpZoomDirection(0)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	m_hAccel = ::LoadAccelerators(AfxFindResourceHandle(IDR_ACCELERATOR, RT_ACCELERATOR), MAKEINTRESOURCE(IDR_ACCELERATOR));
@@ -343,6 +344,7 @@ BEGIN_MESSAGE_MAP(CPTZControlDlg, CDialogEx)
 	ON_BN_UNPUSHED(IDC_BT_RIGHT, &CPTZControlDlg::OnBtUnpushed)
 	ON_WM_TIMER()
 	ON_WM_HOTKEY()
+	ON_MESSAGE(WM_HTTP_COMMAND, &CPTZControlDlg::OnHttpCommand)
 END_MESSAGE_MAP()
 
 
@@ -698,7 +700,10 @@ BOOL CPTZControlDlg::OnInitDialog()
 		}
 	}
 
-	return FALSE;  
+	// Start the HTTP REST server
+	m_httpServer.Start(GetSafeHwnd(), 8989);
+
+	return TRUE;  // Return TRUE unless you set the focus to a control
 }
 
 // If you add a minimize button to your dialog, you will need the code below
@@ -748,6 +753,9 @@ LRESULT CPTZControlDlg::OnNcHitTest(CPoint point)
 
 void CPTZControlDlg::OnClose()
 {
+	// Stop the HTTP server
+	m_httpServer.Stop();
+
 	CRect rect;
 	GetWindowRect(rect);
 	theApp.WriteProfileInt(REG_WINDOW,REG_WINDOW_POSX,rect.left);
@@ -966,7 +974,23 @@ void CPTZControlDlg::OnTimer(UINT_PTR nIDEvent)
 		// Clear the mem button after some delay
 		ResetMemButton();
 	}
-	
+	else if (nIDEvent == TIMER_HTTP_HOLD_STOP)
+	{
+		KillTimer(TIMER_HTTP_HOLD_STOP);
+		GetCurrentWebCam().Pan(0);
+		GetCurrentWebCam().Tilt(0);
+	}
+	else if (nIDEvent == TIMER_HTTP_ZOOM_REPEAT)
+	{
+		GetCurrentWebCam().Zoom(m_iHttpZoomDirection);
+	}
+	else if (nIDEvent == TIMER_HTTP_ZOOM_STOP)
+	{
+		KillTimer(TIMER_HTTP_ZOOM_STOP);
+		KillTimer(TIMER_HTTP_ZOOM_REPEAT);
+		m_iHttpZoomDirection = 0;
+	}
+
 	__super::OnTimer(nIDEvent);
 }
 
@@ -1018,3 +1042,105 @@ void CPTZControlDlg::OnBtSettings()
 	SetActiveCam(m_iCurrentWebCam);
 }
 
+
+LRESULT CPTZControlDlg::OnHttpCommand(WPARAM wParam, LPARAM lParam)
+{
+	int durationMs = static_cast<int>(lParam);
+	bool bContinuous = (durationMs > 0);
+
+	switch (static_cast<HttpCommandId>(wParam))
+	{
+	case HTTP_CMD_PAN_LEFT:
+		if (bContinuous)
+			GetCurrentWebCam().Pan(-1);
+		else
+			GetCurrentWebCam().MovePan(-1);
+		break;
+	case HTTP_CMD_PAN_RIGHT:
+		if (bContinuous)
+			GetCurrentWebCam().Pan(1);
+		else
+			GetCurrentWebCam().MovePan(1);
+		break;
+	case HTTP_CMD_TILT_UP:
+		if (bContinuous)
+			GetCurrentWebCam().Tilt(1);
+		else
+			GetCurrentWebCam().MoveTilt(1);
+		break;
+	case HTTP_CMD_TILT_DOWN:
+		if (bContinuous)
+			GetCurrentWebCam().Tilt(-1);
+		else
+			GetCurrentWebCam().MoveTilt(-1);
+		break;
+	case HTTP_CMD_ZOOM_IN:
+		GetCurrentWebCam().Zoom(1);
+		if (bContinuous)
+		{
+			m_iHttpZoomDirection = 1;
+			SetTimer(TIMER_HTTP_ZOOM_REPEAT, HTTP_ZOOM_REPEAT_INTERVAL, nullptr);
+			SetTimer(TIMER_HTTP_ZOOM_STOP, durationMs, nullptr);
+		}
+		break;
+	case HTTP_CMD_ZOOM_OUT:
+		GetCurrentWebCam().Zoom(-1);
+		if (bContinuous)
+		{
+			m_iHttpZoomDirection = -1;
+			SetTimer(TIMER_HTTP_ZOOM_REPEAT, HTTP_ZOOM_REPEAT_INTERVAL, nullptr);
+			SetTimer(TIMER_HTTP_ZOOM_STOP, durationMs, nullptr);
+		}
+		break;
+	case HTTP_CMD_STOP:
+		GetCurrentWebCam().Pan(0);
+		GetCurrentWebCam().Tilt(0);
+		break;
+	case HTTP_CMD_HOME:			OnBtHome(); break;
+
+	case HTTP_CMD_PRESET_1:
+	case HTTP_CMD_PRESET_2:
+	case HTTP_CMD_PRESET_3:
+	case HTTP_CMD_PRESET_4:
+	case HTTP_CMD_PRESET_5:
+	case HTTP_CMD_PRESET_6:
+	case HTTP_CMD_PRESET_7:
+	case HTTP_CMD_PRESET_8:
+		{
+			int idx = (int)wParam - HTTP_CMD_PRESET_1;
+			OnBtPreset(m_btPreset[idx].GetDlgCtrlID());
+		}
+		break;
+
+	case HTTP_CMD_SAVE_PRESET_1:
+	case HTTP_CMD_SAVE_PRESET_2:
+	case HTTP_CMD_SAVE_PRESET_3:
+	case HTTP_CMD_SAVE_PRESET_4:
+	case HTTP_CMD_SAVE_PRESET_5:
+	case HTTP_CMD_SAVE_PRESET_6:
+	case HTTP_CMD_SAVE_PRESET_7:
+	case HTTP_CMD_SAVE_PRESET_8:
+		{
+			int idx = (int)wParam - HTTP_CMD_SAVE_PRESET_1;
+			GetCurrentWebCam().SavePreset(idx);
+		}
+		break;
+
+	case HTTP_CMD_CAMERA_1:		SetActiveCam(0); break;
+	case HTTP_CMD_CAMERA_2:		SetActiveCam(1); break;
+	case HTTP_CMD_CAMERA_3:		SetActiveCam(2); break;
+	}
+
+	// If a duration was specified for pan/tilt, schedule a stop after the given time
+	if (bContinuous)
+	{
+		HttpCommandId cmd = static_cast<HttpCommandId>(wParam);
+		if (cmd == HTTP_CMD_PAN_LEFT || cmd == HTTP_CMD_PAN_RIGHT ||
+			cmd == HTTP_CMD_TILT_UP || cmd == HTTP_CMD_TILT_DOWN)
+		{
+			SetTimer(TIMER_HTTP_HOLD_STOP, durationMs, nullptr);
+		}
+	}
+
+	return 0;
+}
